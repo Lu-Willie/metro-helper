@@ -1,0 +1,8 @@
+[
+      {
+        "origin": "BL12",
+        "destination": "BL11",
+        "price": 20,
+        "time_seconds": 120
+      }
+    ]

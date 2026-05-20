@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>捷運公車YouBike轉乘小幫手</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body class="bg-gray-100 p-4">
+
+    <div class="max-w-md mx-auto bg-white p-5 rounded-xl shadow-md">
+        <h1 class="text-2xl font-bold mb-4 text-blue-600 text-center">🚇 捷運生活圈查詢</h1>
+        
+        <div class="space-y-3 mb-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-600">起點站</label>
+                <select id="startStation" class="w-full p-2 border rounded-md"></select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-600">終點站</label>
+                <select id="endStation" class="w-full p-2 border rounded-md"></select>
+            </div>
+            <button onclick="queryFare()" class="w-full bg-blue-50 text-white p-2 rounded-md font-semibold hover:bg-blue-600 bg-blue-500">查詢票價與時間</button>
+        </div>
+        <div id="fareResult" class="p-3 bg-blue-50 rounded-md hidden mb-4 text-sm text-blue-800"></div>
+
+        <hr class="my-4">
+
+        <h2 class="text-lg font-bold mb-2 text-gray-700">🔍 車站出口周邊查詢</h2>
+        <select id="targetStation" onchange="loadExits()" class="w-full p-2 border rounded-md mb-3"></select>
+        
+        <div id="exitArea" class="hidden">
+            <div id="exitButtons" class="flex flex-wrap gap-2 mb-3"></div>
+            
+            <div class="flex space-x-1 mb-2 bg-gray-100 p-1 rounded-md">
+                <button onclick="switchTab('spots')" class="flex-1 text-xs py-1.5 rounded-md font-medium text-center bg-white shadow-sm text-blue-600" id="btn-spots">🏞️ 景點機構</button>
+                <button onclick="switchTab('bus')" class="flex-1 text-xs py-1.5 rounded-md font-medium text-center text-gray-500" id="btn-bus">🚌 附近公車</button>
+                <button onclick="switchTab('bike')" class="flex-1 text-xs py-1.5 rounded-md font-medium text-center text-gray-500" id="btn-bike">🚲 YouBike</button>
+            </div>
+            <div id="tabContent" class="p-3 border rounded-md bg-gray-50 text-sm max-h-40 overflow-y-auto">
+                請先點擊上方的一個出口按鈕。
+            </div>
+        </div>
+
+        <div id="map" class="h-60 mt-4 rounded-xl border hidden"></div>
+    </div>
+
+    <script>
+        // ====== 1. 基本設定 ======
+        const TDX_CLIENT_ID = 'wredfishh-67a22435-d1fc-4403'; 
+        const TDX_CLIENT_SECRET = '365e147e-41d5-45aa-80a3-097e12e06db1';
+
+        let tdxToken = ""; 
+        let map;           
+        let stationData = []; 
+        let currentSelectedExit = null; 
+
+        // 網頁載入完成後自動執行
+        window.onload = async function() {
+            initMap();         
+            await getTdxToken(); 
+            await loadInitialData(); 
+        };
+
+        // ====== 2. 初始化 Leaflet 地圖 ======
+        function initMap() {
+            map = L.map('map').setView([25.0462, 121.5175], 16);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+        }
+
+        // ====== 自本地檔案讀取捷運靜態資料 ======
+        async function loadInitialData() {
+            try {
+                let response = await fetch('stations.json');
+                stationData = await response.json();
+                
+                const startSelect = document.getElementById('startStation');
+                const endSelect = document.getElementById('endStation');
+                const targetSelect = document.getElementById('targetStation');
+
+                targetSelect.innerHTML = '<option value="">-- 請選擇車站 --</option>';
+
+                stationData.forEach(station => {
+                    let opt1 = `<option value="${station.station_id}">${station.station_name}</option>`;
+                    let opt2 = `<option value="${station.station_id}">${station.station_name}</option>`;
+                    startSelect.innerHTML += opt1;
+                    endSelect.innerHTML += opt2;
+                    targetSelect.innerHTML += opt1;
+                });
+            } catch (error) {
+                console.error("讀取 stations.json 失敗，請確認檔案是否存在於同資料夾！", error);
+            }
+        }
+
+        // ====== 功能 1 票價查詢實作（新增同站防呆） ======
+        async function queryFare() {
+            const start = document.getElementById('startStation').value;
+            const end = document.getElementById('endStation').value;
+            const resultDiv = document.getElementById('fareResult');
+
+            resultDiv.classList.remove('hidden');
+
+            // 💡 防呆機制：若起點與終點相同，直接回傳同站基本票價
+            if (start === end) {
+                resultDiv.innerHTML = `💰 <b>單程票價：</b> 20 元 (同站進出最低資費) <br> ⏱️ <b>行駛時間：</b> 0 分鐘`;
+                return;
+            }
+
+            try {
+                let response = await fetch('fares.json');
+                let fareData = await response.json();
+
+                let match = fareData.find(f => f.origin === start && f.destination === end);
+
+                if (match) {
+                    let mins = Math.floor(match.time_seconds / 60);
+                    resultDiv.innerHTML = `💰 <b>單程票價：</b> ${match.price} 元 <br> ⏱️ <b>行駛時間：</b> 約 ${mins} 分鐘`;
+                } else {
+                    resultDiv.innerHTML = `❌ 抱歉，本測試版尚未建立此起訖站的票價資料。`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `無法讀取票價資料庫 (fares.json)`;
+            }
+        }
+
+        // ====== 功能 2 捷運站出口按鈕渲染 ======
+        function loadExits() {
+            const targetId = document.getElementById('targetStation').value;
+            const exitArea = document.getElementById('exitArea');
+            const exitButtonsDiv = document.getElementById('exitButtons');
+            const tabContent = document.getElementById('tabContent');
+
+            if (!targetId) {
+                exitArea.classList.add('hidden');
+                return;
+            }
+
+            let station = stationData.find(s => s.station_id === targetId);
+            exitButtonsDiv.innerHTML = ""; 
+            tabContent.innerHTML = "請點擊上方的一個出口按鈕。";
+            
+            if (station && station.exits.length > 0) {
+                exitArea.classList.remove('hidden');
+                station.exits.forEach(exit => {
+                    let btn = document.createElement('button');
+                    btn.className = "bg-white border text-gray-700 px-3 py-1 rounded hover:bg-gray-100 text-xs font-medium shadow-sm transition";
+                    btn.innerText = exit.exit_id;
+                    btn.onclick = function() {
+                        Array.from(exitButtonsDiv.children).forEach(b => b.classList.remove('border-blue-500', 'text-blue-500'));
+                        btn.classList.add('border-blue-500', 'text-blue-500');
+                        
+                        currentSelectedExit = exit; 
+                        onExitClick(exit.lat, exit.lon, exit.exit_id);
+                    };
+                    exitButtonsDiv.appendChild(btn);
+                });
+            } else {
+                exitArea.classList.add('hidden');
+            }
+        }
+
+        // ====== 周邊資訊分頁切換機制 ======
+        function switchTab(tabName) {
+            const tabs = ['spots', 'bus', 'bike'];
+            tabs.forEach(t => {
+                const btn = document.getElementById(`btn-${t}`);
+                if (t === tabName) {
+                    btn.className = "flex-1 text-xs py-1.5 rounded-md font-medium text-center bg-white shadow-sm text-blue-600";
+                } else {
+                    btn.className = "flex-1 text-xs py-1.5 rounded-md font-medium text-center text-gray-500";
+                }
+            });
+
+            const tabContent = document.getElementById('tabContent');
+            if (!currentSelectedExit) {
+                tabContent.innerHTML = "請先選擇一個出口按鈕才能查看詳細資訊。";
+                return;
+            }
+
+            if (tabName === 'spots') {
+                let html = "<h4 class='font-bold text-blue-600 mb-1'>🏞️ 附近景點與機構：</h4>";
+                if(currentSelectedExit.spots && currentSelectedExit.spots.length > 0) {
+                    currentSelectedExit.spots.forEach(s => html += `• ${s}<br>`);
+                } else {
+                    html += "此出口暫無登錄景點。";
+                }
+                tabContent.innerHTML = html;
+            } else if (tabName === 'bus') {
+                tabContent.innerHTML = "🔄 正在從 TDX 抓取最新周邊公車資訊...";
+                fetchNearbyBus(currentSelectedExit.lat, currentSelectedExit.lon);
+            } else if (tabName === 'bike') {
+                tabContent.innerHTML = "🔄 正在從 TDX 抓取最新 YouBike 資訊...";
+                fetchNearbyYouBike(currentSelectedExit.lat, currentSelectedExit.lon);
+            }
+        }
+
+        // ====== 3. 向 TDX 索取臨時通行證 (Token) ======
+        async function getTdxToken() {
+            const authUrl = "https://tdx.transportdata.tw/auth/realms/TDXConnect/protocol/openid-connect/token";
+            const details = {
+                'grant_type': 'client_credentials',
+                'client_id': TDX_CLIENT_ID,
+                'client_secret': TDX_CLIENT_SECRET
+            };
+
+            let formBody = [];
+            for (let property in details) {
+                let encodedKey = encodeURIComponent(property);
+                let encodedValue = encodeURIComponent(details[property]);
+                formBody.push(encodedKey + "=" + encodedValue);
+            }
+            formBody = formBody.join("&");
+
+            try {
+                let response = await fetch(authUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+                    body: formBody
+                });
+                let data = await response.json();
+                tdxToken = data.access_token;
+                console.log("TDX Token 驗證成功！");
+            } catch (error) {
+                console.error("無法取得 TDX Token:", error);
+            }
+        }
+
+        // ====== 4. 當使用者點擊某個捷運出口時觸發的主功能 ======
+        async function onExitClick(lat, lon, exitName) {
+            document.getElementById('map').classList.remove('hidden');
+            map.invalidateSize(); 
+            map.setView([lat, lon], 16);
+            
+            // 清除地圖舊標記
+            map.eachLayer((layer) => {
+                if (!!layer.toGeoJSON && !layer._url) map.removeLayer(layer);
+            });
+
+            L.marker([lat, lon]).addTo(map)
+                .bindPopup(`<b>🚇 捷運出口：${exitName}</b>`)
+                .openPopup();
+
+            switchTab('spots');
+        }
+
+        // ====== 📏 小工具：計算兩點經緯度之間的實際距離(公尺) ======
+        function getDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371e3; 
+            const phi1 = lat1 * Math.PI / 180;
+            const phi2 = lat2 * Math.PI / 180;
+            const deltaPhi = (lat2 - lat1) * Math.PI / 180;
+            const deltaLambda = (lon2 - lon1) * Math.PI / 180;
+
+            const a = Math.sin(deltaPhi/2) * Math.sin(deltaPhi/2) +
+                      Math.cos(phi1) * Math.cos(phi2) *
+                      Math.sin(deltaLambda/2) * Math.sin(deltaLambda/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+            return R * c; 
+        }
+
+        // ====== 5. 抓取周邊 YouBike 即時資訊（前端過濾版） ======
+        async function fetchNearbyYouBike(lat, lon) {
+            const bikeUrl = `https://tdx.transportdata.tw/api/basic/v2/Bike/Availability/City/Taipei?%24format=JSON`;
+            
+            try {
+                let response = await fetch(bikeUrl, {
+                    method: 'GET',
+                    headers: { 'Authorization': "Bearer " + tdxToken }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP 錯誤！狀態碼: ${response.status}`);
+                }
+                
+                let allStations = await response.json();
+                let htmlContent = "<h4 class='font-bold text-orange-600 mb-1'>🚲 YouBike 周邊站點車位：</h4>";
+                
+                if(!Array.isArray(allStations)) {
+                    htmlContent += "暫時無法讀取 YouBike 站點陣列。";
+                } else {
+                    let closeStationsCount = 0;
+
+                    allStations.forEach(station => {
+                        if (!station.Position || !station.Position.PositionLat) return;
+
+                        let distance = getDistance(lat, lon, station.Position.PositionLat, station.Position.PositionLon);
+                        
+                        if (distance <= 350) {
+                            htmlContent += `<p class='mb-1 text-xs'>• ${station.StationName.Zh_tw}: 可借 <b class="text-green-600">${station.AvailableRentBikes}</b> 台 | 可還 <b class="text-blue-600">${station.AvailableReturnBikes}</b> 位 (約${Math.round(distance)}m)</p>`;
+                            closeStationsCount++;
+                            
+                            L.marker([station.Position.PositionLat, station.Position.PositionLon]).addTo(map)
+                                .bindPopup(`🚲 ${station.StationName.Zh_tw}<br>可借：${station.AvailableRentBikes}台 / 可還：${station.AvailableReturnBikes}位<br>距離出口：${Math.round(distance)}公尺`);
+                        }
+                    });
+
+                    if(closeStationsCount === 0) {
+                        htmlContent += "方圓 350 公尺內無 YouBike 站點。";
+                    }
+                }
+                document.getElementById('tabContent').innerHTML = htmlContent;
+            } catch (error) {
+                console.error(error);
+                document.getElementById('tabContent').innerHTML = "暫無 YouBike 即時站點數據。";
+            }
+        }
+
+        // ====== 6. 抓取周邊公車站牌資訊 ======
+        async function fetchNearbyBus(lat, lon) {
+            const safeLat = Number(lat).toFixed(4);
+            const safeLon = Number(lon).toFixed(4);
+            
+            const busUrl = `https://tdx.transportdata.tw/api/basic/v2/Bus/Station/City/Taipei?%24spatialFilter=nearby(${safeLat},${safeLon},300)&%24format=JSON`;
+            
+            try {
+                let response = await fetch(busUrl, {
+                    method: 'GET',
+                    headers: { 'Authorization': "Bearer " + tdxToken }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP 錯誤！狀態碼: ${response.status}`);
+                }
+
+                let busData = await response.json();
+                let htmlContent = "<h4 class='font-bold text-green-700 mb-1'>🚌 周邊公車站牌（地圖已標記）：</h4>";
+                
+                if(!Array.isArray(busData) || busData.length === 0) {
+                    htmlContent += "方圓 300 公尺內無公車站牌。";
+                } else {
+                    let stationNames = new Set();
+                    busData.forEach(station => {
+                        stationNames.add(station.StationName.Zh_tw);
+                        
+                        L.marker([station.StationPosition.PositionLat, station.StationPosition.PositionLon]).addTo(map)
+                            .bindPopup(`🚌 公車站牌：${station.StationName.Zh_tw}`);
+                    });
+                    
+                    stationNames.forEach(name => {
+                        htmlContent += `<p class='mb-1 text-xs'>• ${name}</p>`;
+                    });
+                }
+                document.getElementById('tabContent').innerHTML = htmlContent;
+            } catch (error) {
+                console.error(error);
+                document.getElementById('tabContent').innerHTML = "暫無公車即時站牌數據。";
+            }
+        }
+    </script>
+</body>
+</html>

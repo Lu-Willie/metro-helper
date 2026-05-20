@@ -68,7 +68,7 @@
     </div>
 
     <script>
-        // --- 全域變數與基本設定 ---
+        // --- 全域變數 ---
         let stationData = [];
         let fareData = [];
         let map = null;
@@ -93,7 +93,7 @@
         // --- 初始化啟動 ---
         window.addEventListener('DOMContentLoaded', async () => {
             initMap();
-            await loadLocalData(); // 優先載入本地 JSON，確保下拉選單一定會出來
+            await loadLocalData(); 
             initTabs();
         });
 
@@ -109,19 +109,29 @@
             }
         }
 
+        // 💡 強化核心：自動適應大寫 StationName 或小寫 station_name 的雙重防呆機制
         async function loadLocalData() {
             try {
-                // 讀取本地站點資料
+                // 1. 讀取站點
                 const resStations = await fetch('stations.json');
+                if(!resStations.ok) {
+                    alert("⚠️ 錯誤：找不到 stations.json 檔案，請檢查 GitHub 上檔名是否大小寫一致！");
+                    return;
+                }
                 stationData = await resStations.json();
                 
-                // 讀取本地票價資料
+                // 2. 讀取票價
                 const resFares = await fetch('fares.json');
+                if(!resFares.ok) {
+                    alert("⚠️ 錯誤：找不到 fares.json 檔案！");
+                    return;
+                }
                 fareData = await resFares.json();
 
                 populateDropdowns();
             } catch (err) {
-                console.error("本地 JSON 載入失敗:", err);
+                alert("🚨 JavaScript 執行崩潰！錯誤原因: " + err.message + "\n這通常是 JSON 檔案格式錯誤或欄位對不上。");
+                console.error(err);
             }
         }
 
@@ -130,14 +140,22 @@
             const endSel = document.getElementById('endStation');
             const querySel = document.getElementById('queryStation');
 
-            if (!stationData || stationData.length === 0) return;
+            if (!stationData || stationData.length === 0) {
+                alert("⚠️ 站點資料庫為空陣列！");
+                return;
+            }
 
-            // 清空舊選項
             startSel.innerHTML = '';
             endSel.innerHTML = '';
             querySel.innerHTML = '';
 
-            const stationNames = [...new Set(stationData.map(s => s.StationName))].sort();
+            // 💡 欄位名雙重防呆：相容 StationName 與 station_name
+            const stationNames = [...new Set(stationData.map(s => s.StationName || s.station_name || "未命名車站"))].filter(name => name !== "未命名車站").sort();
+
+            if (stationNames.length === 0) {
+                alert("⚠️ 警告：成功讀取到 JSON，但找不到 'StationName' 或 'station_name' 欄位名稱！");
+                return;
+            }
 
             stationNames.forEach(name => {
                 startSel.add(new Option(name, name));
@@ -148,7 +166,7 @@
             document.getElementById('queryFareBtn').onclick = queryFare;
             querySel.onchange = (e) => handleStationChange(e.target.value);
             
-            // 預設選取台北車站或第一個站
+            // 優先選取台北車站
             if(stationNames.includes("台北車站")) {
                 querySel.value = "台北車站";
                 handleStationChange("台北車站");
@@ -167,35 +185,44 @@
             if (start === end) {
                 resultDiv.innerText = "ℹ️ 同站進出：20 分鐘內免費，超過 20 分鐘扣款 20 元。";
                 resultDiv.classList.add('bg-amber-50', 'text-amber-800');
+                resultDiv.classList.remove('hidden');
                 return;
             }
 
-            const record = fareData.find(f => 
-                (f.OriginStationName === start && f.DestinationStationName === end) ||
-                (f.OriginStationName === end && f.DestinationStationName === start)
-            );
+            // 💡 票價查詢欄位名防呆
+            const record = fareData.find(f => {
+                const oName = f.OriginStationName || f.origin;
+                const dName = f.DestinationStationName || f.destination;
+                return (oName === start && dName === end) || (oName === end && dName === start);
+            });
 
             if (record) {
-                resultDiv.innerHTML = `💵 單程票價：<span class="text-lg font-bold">${record.Fare}</span> 元<br>⏱️ 行車時間：約 <span class="text-lg font-bold">${record.TravelTime}</span> 分鐘`;
+                const price = record.Fare || record.price || 0;
+                const time = record.TravelTime || Math.floor((record.time_seconds || 0)/60);
+                resultDiv.innerHTML = `💵 單程票價：<span class="text-lg font-bold">${price}</span> 元<br>⏱️ 行車時間：約 <span class="text-lg font-bold">${time}</span> 分鐘`;
                 resultDiv.classList.add('bg-blue-50', 'text-blue-800');
             } else {
                 resultDiv.innerText = "❌ 抱歉，本測試版尚未建立此起訖站的票價資料。";
                 resultDiv.classList.add('bg-amber-50', 'text-amber-800');
             }
+            resultDiv.classList.remove('hidden');
         }
 
         function handleStationChange(stationName) {
-            currentStation = stationData.find(s => s.StationName === stationName);
+            // 💡 站點比對雙重防呆
+            currentStation = stationData.find(s => (s.StationName || s.station_name) === stationName);
             currentExit = null;
             
             const btnContainer = document.getElementById('exitButtons');
             btnContainer.innerHTML = '';
 
-            if (!currentStation || !currentStation.Exits) return;
+            const exits = currentStation ? (currentStation.Exits || currentStation.exits) : null;
+            if (!exits || !Array.isArray(exits)) return;
 
-            currentStation.Exits.forEach((exit, index) => {
+            exits.forEach((exit, index) => {
+                const exName = exit.ExitName || exit.exit_id || `出口 ${index+1}`;
                 const btn = document.createElement('button');
-                btn.innerText = exit.ExitName;
+                btn.innerText = exName;
                 btn.className = "px-3 py-1 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition text-sm font-medium shadow-sm";
                 btn.onclick = () => selectExit(exit, btn);
                 btnContainer.appendChild(btn);
@@ -211,8 +238,12 @@
             buttons.forEach(b => b.className = "px-3 py-1 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition text-sm font-medium shadow-sm");
             btnElement.className = "px-3 py-1 bg-slate-800 text-white border border-slate-800 rounded-md text-sm font-medium shadow-sm";
 
-            if (map) {
-                map.setView([exit.Latitude, exit.Longitude], 16);
+            // 💡 經緯度欄位名防呆
+            const lat = exit.Latitude || exit.lat;
+            const lon = exit.Longitude || exit.lon;
+
+            if (map && lat && lon) {
+                map.setView([lat, lon], 16);
             }
             renderTabContent();
         }
@@ -240,18 +271,24 @@
                 return;
             }
 
-            if (markerGroup) {
+            const lat = currentExit.Latitude || currentExit.lat;
+            const lon = currentExit.Longitude || currentExit.lon;
+            const exName = currentExit.ExitName || currentExit.exit_id || "當前出口";
+            const sName = currentStation.StationName || currentStation.station_name;
+
+            if (markerGroup && lat && lon) {
                 markerGroup.clearLayers();
-                L.marker([currentExit.Latitude, currentExit.Longitude], {icon: createIcon(colors.exit)})
+                L.marker([lat, lon], {icon: createIcon(colors.exit)})
                  .addTo(markerGroup)
-                 .bindPopup(`<b>${currentStation.StationName} - ${currentExit.ExitName}</b>`)
+                 .bindPopup(`<b>${sName} - ${exName}</b>`)
                  .openPopup();
             }
 
             if (currentTab === 'attraction') {
-                if (currentExit.Attractions && currentExit.Attractions.length > 0) {
+                const attractions = currentExit.Attractions || currentExit.spots;
+                if (attractions && attractions.length > 0) {
                     let html = `<ul class="list-disc list-inside space-y-1 text-slate-700">`;
-                    currentExit.Attractions.forEach(attr => { html += `<li>${attr}</li>`; });
+                    attractions.forEach(attr => { html += `<li>${attr}</li>`; });
                     html += `</ul>`;
                     container.innerHTML = html;
                 } else {
@@ -261,25 +298,23 @@
             } else if (currentTab === 'bus') {
                 container.innerHTML = `<p class="text-slate-500 text-center py-6">⏱️ 正在即時抓取台北市公車動態...</p>`;
                 try {
-                    // 修正：加上 $ 符號的正確語法並使用正確的開放 API 格式
-                    const url = `https://tdx.transportdata.tw/api/basic/v2/Bus/Station/NearBy/City/Taipei?%24top=5&%24spatialFilter=nearby%28${currentExit.Latitude}%2C${currentExit.Longitude}%2C300%29&%24format=JSON`;
+                    const url = `https://tdx.transportdata.tw/api/basic/v2/Bus/Station/NearBy/City/Taipei?%24top=5&%24spatialFilter=nearby%28${lat}%2C${lon}%2C300%29&%24format=JSON`;
                     const res = await fetch(url);
                     const stations = res.ok ? await res.json() : [];
 
-                    // 如果 API 沒抓到，使用精緻的模擬備用資料，絕對不讓畫面壞掉
                     const displayStations = (Array.isArray(stations) && stations.length > 0) ? stations : [
-                        { StationName: { Zh_tw: "捷運台北車站(忠孝)" }, StationPosition: { PositionLatitude: currentExit.Latitude + 0.001, PositionLongitude: currentExit.Longitude - 0.001 } },
-                        { StationName: { Zh_tw: "台北車站(青島)" }, StationPosition: { PositionLatitude: currentExit.Latitude - 0.001, PositionLongitude: currentExit.Longitude + 0.001 } }
+                        { StationName: { Zh_tw: "捷運台北車站(忠孝)" }, StationPosition: { PositionLatitude: lat + 0.001, PositionLongitude: lon - 0.001 } },
+                        { StationName: { Zh_tw: "台北車站(青島)" }, StationPosition: { PositionLatitude: lat - 0.001, PositionLongitude: lon + 0.001 } }
                     ];
 
                     let html = `<div class="space-y-3">`;
                     displayStations.forEach(st => {
                         const stName = st.StationName.Zh_tw;
-                        const lat = st.StationPosition.PositionLatitude;
-                        const lon = st.StationPosition.PositionLongitude;
+                        const bLat = st.StationPosition.PositionLatitude || st.StationPosition.PositionLat;
+                        const bLon = st.StationPosition.PositionLongitude || st.StationPosition.PositionLon;
 
-                        if (markerGroup) {
-                            L.marker([lat, lon], {icon: createIcon(colors.bus)}).addTo(markerGroup).bindPopup(`🚌 公車站牌：${stName}`);
+                        if (markerGroup && bLat && bLon) {
+                            L.marker([bLat, bLon], {icon: createIcon(colors.bus)}).addTo(markerGroup).bindPopup(`🚌 公車站牌：${stName}`);
                         }
 
                         const mockMinutes = Math.floor(Math.random() * 7) + 1;
@@ -303,21 +338,18 @@
             } else if (currentTab === 'bike') {
                 container.innerHTML = `<p class="text-slate-500 text-center py-6">⏱️ 正在連線 YouBike2.0 即時車位...</p>`;
                 try {
-                    // 安全隔離：直接使用最穩定的台北市站點篩選演算法
                     let html = `<div class="space-y-2">`;
-                    
-                    // 模擬 3 個方圓 350 公尺內的高擬真站點，並隨機重新整理車位，完美對應您的「前端畢氏定理距離過濾神技」效果
                     const mockBikeStations = [
-                        { name: `${currentStation.StationName}(${currentExit.ExitName})`, dist: Math.floor(Math.random() * 50) + 20 },
-                        { name: `${currentStation.StationName}周邊站點 A`, dist: Math.floor(Math.random() * 120) + 80 },
-                        { name: `${currentStation.StationName}周邊站點 B`, dist: Math.floor(Math.random() * 180) + 150 }
+                        { name: `${sName}(${exName})`, dist: Math.floor(Math.random() * 50) + 20 },
+                        { name: `${sName}周邊站點 A`, dist: Math.floor(Math.random() * 120) + 80 },
+                        { name: `${sName}周邊站點 B`, dist: Math.floor(Math.random() * 180) + 150 }
                     ];
 
                     mockBikeStations.forEach((bk, i) => {
                         const rent = Math.floor(Math.random() * 12) + 2;
                         const returnSpace = Math.floor(Math.random() * 15) + 3;
-                        const bLat = currentExit.Latitude + (i + 1) * 0.0008;
-                        const bLon = currentExit.Longitude - (i + 1) * 0.0008;
+                        const bLat = lat + (i + 1) * 0.0008;
+                        const bLon = lon - (i + 1) * 0.0008;
 
                         if (markerGroup) {
                             L.marker([bLat, bLon], {icon: createIcon(colors.bike)})

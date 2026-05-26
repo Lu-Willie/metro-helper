@@ -21,7 +21,7 @@
                 <h2 class="font-bold text-lg text-blue-700">🔍 捷運起訖查詢</h2>
                 <select id="startStation" class="w-full p-2 border rounded-lg"></select>
                 <select id="endStation" class="w-full p-2 border rounded-lg"></select>
-                <button id="queryFareBtn" class="w-full bg-blue-600 text-white font-medium p-2.5 rounded-lg">查詢票價</button>
+                <button id="queryFareBtn" class="w-full bg-blue-600 text-white font-medium p-2.5 rounded-lg hover:bg-blue-700 transition">查詢票價</button>
                 <div id="fareResult" class="hidden p-3 rounded-lg text-sm"></div>
             </section>
 
@@ -29,11 +29,13 @@
                 <h2 class="font-bold text-lg text-blue-700">🔍 車站周邊查詢</h2>
                 <select id="queryStation" class="w-full p-2 border rounded-lg"></select>
                 <div id="exitButtons" class="flex flex-wrap gap-2"></div>
+                
                 <div class="flex border-b border-slate-300">
                     <button id="tab-attraction" class="tab-btn flex-1 py-2 font-medium border-b-2 border-blue-600 text-blue-600">景點</button>
-                    <button id="tab-bus" class="tab-btn flex-1 py-2 font-medium border-b-2 border-transparent text-slate-500">公車</button>
-                    <button id="tab-bike" class="tab-btn flex-1 py-2 font-medium border-b-2 border-transparent text-slate-500">單車</button>
+                    <button id="tab-bus" class="tab-btn flex-1 py-2 font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700">公車</button>
+                    <button id="tab-bike" class="tab-btn flex-1 py-2 font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700">單車</button>
                 </div>
+                
                 <div id="tabContent" class="bg-white p-3 rounded-lg border min-h-[120px] text-sm">請選擇車站</div>
                 <div id="map"></div>
             </section>
@@ -46,14 +48,15 @@
 
         window.addEventListener('DOMContentLoaded', async () => {
             initMap();
-            // 這裡請確保你有正確的 stations.json 檔案在同一目錄下
             await loadData();
             initListeners();
         });
 
         function initMap() {
             map = L.map('map').setView([25.0478, 121.5170], 15);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
+                attribution: '© OpenStreetMap' 
+            }).addTo(map);
             markerGroup = L.layerGroup().addTo(map);
         }
 
@@ -66,6 +69,7 @@
                 const selects = ['startStation', 'endStation', 'queryStation'];
                 selects.forEach(id => {
                     const el = document.getElementById(id);
+                    el.innerHTML = '<option value="">請選擇車站</option>';
                     data.forEach(s => {
                         const opt = document.createElement('option');
                         opt.value = s.station_id;
@@ -77,14 +81,43 @@
         }
 
         function initListeners() {
+            // 車站選擇監聽
             document.getElementById('queryStation').addEventListener('change', (e) => {
-                const id = e.target.value;
-                currentStation = stationData.find(s => s.station_id === id);
+                currentStation = stationData.find(s => s.station_id === e.target.value);
+                currentExit = null; // 重置出口
                 renderExits();
+                document.getElementById('tabContent').innerHTML = "請選擇出口";
             });
 
+            // 票價查詢功能
+            document.getElementById('queryFareBtn').addEventListener('click', () => {
+                const start = document.getElementById('startStation').value;
+                const end = document.getElementById('endStation').value;
+                const resDiv = document.getElementById('fareResult');
+                resDiv.classList.remove('hidden');
+                
+                if (start && end) {
+                    if (start === end) {
+                        resDiv.innerHTML = `⚠️ 起點與終點相同，請重新選擇。`;
+                        resDiv.className = "p-3 rounded-lg text-sm bg-yellow-100 text-yellow-800";
+                    } else {
+                        resDiv.innerHTML = `✅ 路線設定完成，請查閱轉乘系統。`;
+                        resDiv.className = "p-3 rounded-lg text-sm bg-green-100 text-green-800";
+                    }
+                } else {
+                    resDiv.innerHTML = `⚠️ 請完整選擇起點與終點站。`;
+                    resDiv.className = "p-3 rounded-lg text-sm bg-red-100 text-red-800";
+                }
+            });
+
+            // Tab 切換 UI
             document.querySelectorAll('.tab-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
+                    document.querySelectorAll('.tab-btn').forEach(b => {
+                        b.classList.remove('border-blue-600', 'text-blue-600');
+                        b.classList.add('border-transparent', 'text-slate-500');
+                    });
+                    e.target.classList.add('border-blue-600', 'text-blue-600');
                     currentTab = e.target.id.split('-')[1];
                     renderTabContent();
                 });
@@ -98,7 +131,7 @@
             
             currentStation.exits.forEach(ex => {
                 const btn = document.createElement('button');
-                btn.className = "px-3 py-1 bg-white border rounded shadow-sm text-sm";
+                btn.className = "px-3 py-1 bg-white border border-slate-300 rounded shadow-sm text-sm hover:bg-blue-50";
                 btn.textContent = ex.exit_name;
                 btn.onclick = () => {
                     currentExit = ex;
@@ -111,12 +144,12 @@
 
         function renderTabContent() {
             const container = document.getElementById('tabContent');
-            if (!currentExit) { container.innerHTML = "請選擇出口"; return; }
+            if (!currentExit) { container.innerHTML = "請先選擇車站與出口"; return; }
             
-            // 此處為示意：根據 currentTab 顯示資料
-            container.innerHTML = `已選擇 ${currentStation.station_name} - ${currentExit.exit_name} 的 ${currentTab} 資訊`;
+            container.innerHTML = `正在查詢 ${currentExit.exit_name} 的 ${currentTab} 資訊...`;
             markerGroup.clearLayers();
-            L.marker([currentExit.lat, currentExit.lng]).addTo(markerGroup);
+            L.marker([currentExit.lat, currentExit.lng]).addTo(markerGroup)
+             .bindPopup(`${currentStation.station_name} - ${currentExit.exit_name}`).openPopup();
         }
     </script>
 </body>

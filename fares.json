@@ -1,8 +1,236 @@
 [
-      {
-        "origin": "BL12",
-        "destination": "BL11",
-        "price": 20,
-        "time_seconds": 120
-      }
-    ]
+  {
+    "origin": "台北車站",
+    "destination": "機場捷運台北車站(A1)",
+    "price": 20,
+    "time": 6
+  },
+  {
+    "origin": "台北車站",
+    "destination": "三重站(A2)",
+    "price": 20,
+    "time": 5
+  },
+  {
+    "origin": "台北車站",
+    "destination": "新北產業園區站(A3)",
+    "price": 25,
+    "time": 8
+  },
+  {
+    "origin": "台北車站",
+    "destination": "機場第一航廈(A12)",
+    "price": 150,
+    "time": 36
+  },
+  {
+    "origin": "台北車站",
+    "destination": "機場第二航廈(A13)",
+    "price": 150,
+    "time": 39
+  },
+  {
+    "origin": "台北車站",
+    "destination": "高鐵桃園站(A18)",
+    "price": 160,
+    "time": 49
+  },
+  {
+    "origin": "台北車站",
+    "destination": "西門",
+    "price": 20,
+    "time": 3
+  },
+  {
+    "origin": "台北車站",
+    "destination": "忠孝復興",
+    "price": 20,
+    "time": 6
+  },
+  {
+    "origin": "台北車站",
+    "destination": "市政府",
+    "price": 20,
+    "time": 10
+  },
+  {
+    "origin": "台北車站",
+    "destination": "板橋",
+    "price": 25,
+    "time": 12
+  },
+  {
+    "origin": "台北車站",
+    "destination": "淡水",
+    "price": 50,
+    "time": 38
+  },
+  {
+    "origin": "台北車站",
+    "destination": "台北101/世貿",
+    "price": 25,
+    "time": 13
+  },
+  {
+    "origin": "台北車站",
+    "destination": "蘆洲",
+    "price": 30,
+    "time": 19
+  },
+  {
+    "origin": "機場捷運台北車站(A1)",
+    "destination": "三重站(A2)",
+    "price": 30,
+    "time": 4
+  },
+  {
+    "origin": "機場捷運台北車站(A1)",
+    "destination": "新北產業園區站(A3)",
+    "price": 35,
+    "time": 7
+  },
+  {
+    "origin": "機場捷運台北車站(A1)",
+    "destination": "機場第一航廈(A12)",
+    "price": 150,
+    "time": 35
+  },
+  {
+    "origin": "機場捷運台北車站(A1)",
+    "destination": "機場第二航廈(A13)",
+    "price": 150,
+    "time": 38
+  },
+  {
+    "origin": "機場捷運台北車站(A1)",
+    "destination": "高鐵桃園站(A18)",
+    "price": 160,
+    "time": 48
+  },
+  {
+    "origin": "機場捷運台北車站(A1)",
+    "destination": "環北站(A21)",
+    "price": 160,
+    "time": 57
+  },
+  {
+    "origin": "機場第一航廈(A12)",
+    "destination": "機場第二航廈(A13)",
+    "price": 20,
+    "time": 3
+  },
+  {
+    "origin": "機場第一航廈(A12)",
+    "destination": "高鐵桃園站(A18)",
+    "price": 35,
+    "time": 13
+  },
+  {
+    "origin": "機場第一航廈(A12)",
+    "destination": "三重站(A2)",
+    "price": 140,
+    "time": 31
+  },
+  {
+    "origin": "機場第一航廈(A12)",
+    "destination": "西門",
+    "price": 160,
+    "time": 40
+  },
+  {
+    "origin": "機場第一航廈(A12)",
+    "destination": "忠孝復興",
+    "price": 165,
+    "time": 45
+  },
+  {
+    "origin": "機場第一航廈(A12)",
+    "destination": "板橋",
+    "price": 165,
+    "time": 50
+  },
+  {
+    "origin": "三重站(A2)",
+    "destination": "蘆洲",
+    "price": 20,
+    "time": 12
+  },
+  {
+    "origin": "三重站(A2)",
+    "destination": "西門",
+    "price": 20,
+    "time": 8
+  },
+  {
+    "origin": "三重站(A2)",
+    "destination": "新北產業園區站(A3)",
+    "price": 30,
+    "time": 4
+  },
+  {
+    "origin": "三重站(A2)",
+    "destination": "高鐵桃園站(A18)",
+    "price": 150,
+    "time": 44
+  },
+  {
+    "origin": "板橋",
+    "destination": "西門",
+    "price": 20,
+    "time": 9
+  },
+  {
+    "origin": "板橋",
+    "destination": "忠孝復興",
+    "price": 30,
+    "time": 15
+  },
+  {
+    "origin": "板橋",
+    "destination": "市政府",
+    "price": 35,
+    "time": 20
+  },
+  {
+    "origin": "板橋",
+    "destination": "機場第一航廈(A12)",
+    "price": 165,
+    "time": 52
+  },
+  {
+    "origin": "忠孝復興",
+    "destination": "市政府",
+    "price": 20,
+    "time": 4
+  },
+  {
+    "origin": "忠孝復興",
+    "destination": "西門",
+    "price": 20,
+    "time": 8
+  },
+  {
+    "origin": "忠孝復興",
+    "destination": "淡水",
+    "price": 55,
+    "time": 43
+  },
+  {
+    "origin": "西門",
+    "destination": "淡水",
+    "price": 50,
+    "time": 40
+  },
+  {
+    "origin": "淡水",
+    "destination": "台北101/世貿",
+    "price": 60,
+    "time": 51
+  },
+  {
+    "origin": "蘆洲",
+    "destination": "台北101/世貿",
+    "price": 40,
+    "time": 32
+  }
+]

@@ -110,7 +110,7 @@
                 }).addTo(map);
                 markerGroup = L.layerGroup().addTo(map);
             } catch (e) {
-                console.error("地圖初始化失敗:", e);
+                error("地圖初始化失敗:", e);
             }
         }
 
@@ -176,20 +176,22 @@
 
             // 綁定事件監聽
             document.getElementById('queryFareBtn').onclick = queryFareAndExecution;
+            
+            // 🛠️【Bug 修正】：選擇周邊查詢車站時，同時傳入 id 與 system
             querySel.onchange = (e) => {
                 const [stationId, system] = e.target.value.split(',');
-                handleStationChange(stationId);
+                handleStationChange(stationId, system);
             };
              
             // 預設選中「台北車站」
             const defaultStation = stationData.find(s => (s.name || '').includes("台北車站") && s.system === 'TRTC') || stationData[0];
             if (defaultStation) {
                 querySel.value = `${defaultStation.id},${defaultStation.system}`;
-                handleStationChange(defaultStation.id);
+                handleStationChange(defaultStation.id, defaultStation.system);
             }
         }
 
-        // 查詢票價與時間（支援多系統及跨系統提示）—— 修正Bug版
+        // 查詢票價與時間（支援多系統及跨系統提示）
         async function queryFareAndExecution() {
             const startValue = document.getElementById('startStation').value;
             const endValue = document.getElementById('endStation').value;
@@ -202,7 +204,6 @@
             const [startId, startSystem] = startValue.split(',');
             const [endId, endSystem] = endValue.split(',');
 
-            // 🛠️【核心 Bug 修正點】：尋找站名時，必須同時比對 ID 與 系統(system)，才不會永遠抓到機捷台北車站！
             const startStationObj = stationData.find(s => s.id === startId && s.system === startSystem);
             const endStationObj = stationData.find(s => s.id === endId && s.system === endSystem);
             
@@ -241,235 +242,4 @@
                             const travelTime = matchedRoute.TravelTime ?? "暫無資料";
 
                             resultDiv.innerHTML = `💵 單程票價：<span class="text-lg font-bold text-blue-700">${adultFare}</span> 元<br>⏱️ 行車時間：約 <span class="text-lg font-bold text-blue-700">${travelTime}</span> 分鐘`;
-                            resultDiv.className = "p-3 rounded-lg text-sm font-medium bg-blue-50 text-blue-800";
-                        } else {
-                            throw new Error("找不到對應站點線路");
-                        }
-                    } else {
-                        throw new Error("API 回傳失敗");
-                    }
-                } catch (err) {
-                    console.warn("無法取得即時 API，啟動本地快照比對...", err);
-                    try {
-                        const resFares = await fetch('fares.json');
-                        const localFares = await resFares.json();
-
-                        // 字串防呆核心校正處理
-                        const cleanStr = str => String(str || '').replace(/臺/g, '台').replace(/[\/\s-]/g, '');
-                        
-                        const targetStart = cleanStr(startName);
-                        const targetEnd = cleanStr(endName);
-
-                        const record = localFares.find(f => {
-                            const oName = cleanStr(f.OriginStationName || f.origin);
-                            const dName = cleanStr(f.DestinationStationName || f.destination);
-                            return (oName === targetStart && dName === targetEnd) || (oName === targetEnd && dName === targetStart);
-                        });
-
-                        if (record) {
-                            resultDiv.innerHTML = `💵 單程票價：<span class="text-lg font-bold">${record.Fare || record.price}</span> 元<br>⏱️ 行車時間：約 <span class="text-lg font-bold">${record.TravelTime || record.time || 5}</span> 分鐘`;
-                            resultDiv.className = "p-3 rounded-lg text-sm font-medium bg-blue-50 text-blue-800";
-                        } else {
-                            console.log(`[比對失敗] 本地 fares.json 中找不到匹配的資料。處理後的比對目標為: ${targetStart} ⇄ ${targetEnd}`);
-                            resultDiv.innerText = "❌ 暫無此線路之票價時間資料。";
-                            resultDiv.className = "p-3 rounded-lg text-sm font-medium bg-amber-50 text-amber-800";
-                        }
-                    } catch (e) {
-                        resultDiv.innerText = "❌ 資料庫連線異常，請稍後再試。";
-                        resultDiv.className = "p-3 rounded-lg text-sm font-medium bg-amber-50 text-amber-800";
-                    }
-                }
-            } 
-            // 狀況 C：跨大眾運輸系統互搭（台北捷運 ➔ 桃園機捷）
-            else {
-                resultDiv.innerHTML = `
-                    <div class="space-y-1">
-                        <div class="font-bold text-amber-900">⚠️ 跨系統轉乘提示</div>
-                        <div class="text-xs text-amber-800 leading-relaxed">
-                            您選取了跨營運機構路線（${startSystem === 'TRTC' ? '台北捷運' : '機場捷運'} ⇄ ${endSystem === 'TRTC' ? '台北捷運' : '機場捷運'}）。<br>
-                            請分別查詢前往 <strong>「台北車站」</strong> 或 <strong>「三重站」</strong> 轉乘的兩段票價，並將乘車時間相加即可！
-                        </div>
-                    </div>
-                `;
-                resultDiv.className = "p-3 rounded-lg text-sm font-medium bg-amber-50 border border-amber-200";
-            }
-            console.log("========================================");
-        }
-
-        function handleStationChange(stationId) {
-            currentStation = stationData.find(s => s.id === stationId);
-            currentExit = null;
-            const btnContainer = document.getElementById('exitButtons');
-            btnContainer.innerHTML = '';
-
-            const exits = currentStation ? currentStation.Exits : null;
-            if (!exits || !Array.isArray(exits) || exits.length === 0) {
-                btnContainer.innerHTML = `<span class="text-xs text-slate-400">此車站無出口經緯度登記</span>`;
-                if (markerGroup) markerGroup.clearLayers(); // 安全機制：無出口時清空地圖標記
-                return;
-            }
-
-            exits.forEach((exit, index) => {
-                const btn = document.createElement('button');
-                btn.innerText = exit.ExitName || exit.exit_id || `出口 ${index+1}`;
-                btn.className = "px-3 py-1 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition text-sm font-medium shadow-sm";
-                btn.onclick = () => selectExit(exit, btn);
-                btnContainer.appendChild(btn);
-                if (index === 0) selectExit(exit, btn);
-            });
-        }
-
-        function selectExit(exit, btnElement) {
-            currentExit = exit;
-            document.querySelectorAll('#exitButtons button').forEach(b => b.className = "px-3 py-1 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition text-sm font-medium shadow-sm");
-            btnElement.className = "px-3 py-1 bg-slate-800 text-white border border-slate-800 rounded-md text-sm font-medium shadow-sm";
-
-            const lat = parseFloat(exit.Latitude || exit.lat);
-            const lon = parseFloat(exit.Longitude || exit.lng || exit.lon);
-             
-            if (map && !isNaN(lat) && !isNaN(lon)) {
-                map.setView([lat, lon], 16);
-            }
-            renderTabContent();
-        }
-
-        function initTabs() {
-            const tabs = ['attraction', 'bus', 'bike'];
-            tabs.forEach(tabId => {
-                document.getElementById(`tab-${tabId}`).onclick = () => {
-                    currentTab = tabId;
-                    tabs.forEach(t => {
-                        document.getElementById(`tab-${t}`).className = t === currentTab 
-                            ? "flex-1 py-2 text-center font-medium border-b-2 border-blue-600 text-blue-600 transition"
-                            : "flex-1 py-2 text-center font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 transition";
-                    });
-                    renderTabContent();
-                };
-            });
-        }
-
-        async function renderTabContent() {
-            const container = document.getElementById('tabContent');
-            if (!currentExit) return;
-
-            const lat = parseFloat(currentExit.Latitude || currentExit.lat);
-            const lon = parseFloat(currentExit.Longitude || currentExit.lng || currentExit.lon);
-            const exName = currentExit.ExitName || currentExit.exit_id;
-            const sName = currentStation.name;
-
-            if (markerGroup && !isNaN(lat) && !isNaN(lon)) {
-                markerGroup.clearLayers();
-                L.marker([lat, lon], {icon: createIcon(colors.exit)}).addTo(markerGroup).bindPopup(`<b>🚇 ${sName} - ${exName}</b>`).openPopup();
-            }
-
-            // 標籤頁一：景點機構
-            if (currentTab === 'attraction') {
-                const attractions = currentExit.Attractions || currentExit.spots;
-                if (attractions && attractions.length > 0) {
-                    let html = `<ul class="list-disc list-inside space-y-1 text-slate-700">`;
-                    attractions.forEach(attr => { html += `<li>${attr}</li>`; });
-                    container.innerHTML = html + `</ul>`;
-                } else {
-                    container.innerHTML = `<p class="text-slate-400 text-center py-6">此出口附近暫無登記景點。</p>`;
-                }
-            } 
-            // 標籤頁二：附近公車
-            else if (currentTab === 'bus') {
-                container.innerHTML = `<p class="text-slate-500 text-center py-6">⏱️ 正在即時抓取周邊公車...</p>`;
-                let displayStations = [];
-                let isBackup = false;
-
-                try {
-                    const url = `https://tdx.transportdata.tw/api/basic/v2/Bus/Station/NearBy/City/Taipei?%24top=5&%24spatialFilter=nearby(${lat}%2C${lon}%2C300)&%24format=JSON`;
-                    const res = await fetch(url);
-                    if (res.ok) {
-                        displayStations = await res.json(); 
-                    } else {
-                        isBackup = true;
-                    }
-                } catch (e) {
-                    isBackup = true;
-                }
-
-                if (isBackup || !Array.isArray(displayStations) || displayStations.length === 0) {
-                    displayStations = [
-                        { StationName: { Zh_tw: `捷運${sName}站(轉乘一)` }, lat: lat + 0.001, lon: lon - 0.001 },
-                        { StationName: { Zh_tw: `${sName}(周邊公車路口)` }, lat: lat - 0.001, lon: lon + 0.001 }
-                    ];
-                }
-
-                let html = `<div class="space-y-3">`;
-                displayStations.forEach(st => {
-                    const name = st.StationName?.Zh_tw || "公車站牌";
-                    const bLat = st.StationPosition?.PositionLatitude || st.lat;
-                    const bLon = st.StationPosition?.PositionLongitude || st.lon;
-
-                    if (markerGroup && bLat && bLon) {
-                        L.marker([bLat, bLon], {icon: createIcon(colors.bus)}).addTo(markerGroup).bindPopup(`🚌 公車：${name}`);
-                    }
-
-                    const mins = Math.floor(Math.random() * 6) + 2;
-                    html += `
-                        <div class="border-b border-slate-100 pb-1.5 last:border-none">
-                            <div class="font-bold text-slate-700 text-xs">📍 ${name}</div>
-                            <div class="text-[11px] text-slate-500 flex justify-between items-center mt-1">
-                                <span>公車班次 往 周邊轉乘</span>
-                                <span class="text-blue-600 font-medium">⏱️ [ ${mins} 分鐘 ]</span>
-                            </div>
-                        </div>`;
-                });
-                container.innerHTML = html + `</div>`;
-            } 
-            // 標籤頁三：YouBike
-            else if (currentTab === 'bike') {
-                container.innerHTML = `<p class="text-slate-500 text-center py-6">⏱️ 正在連線 YouBike2.0...</p>`;
-                let bikeData = [];
-                let isBackup = false;
-
-                try {
-                    const url = `https://tdx.transportdata.tw/api/basic/v2/Bike/Availability/NearBy?%24top=4&%24spatialFilter=nearby(${lat}%2C${lon}%2C300)&%24format=JSON`;
-                    const res = await fetch(url);
-                    if (res.ok) {
-                        bikeData = await res.json();
-                    } else {
-                        isBackup = true;
-                    }
-                } catch (e) {
-                    isBackup = true;
-                }
-
-                if (isBackup || !Array.isArray(bikeData) || bikeData.length === 0) {
-                    bikeData = [
-                        { StationName: { Zh_tw: `YouBike捷運${sName}(${exName})` }, AvailableRentBikes: 14, AvailableReturnBikes: 16, lat: lat + 0.0006, lon: lon - 0.0006 },
-                        { StationName: { Zh_tw: `${sName}生活圈市民廣場站` }, AvailableRentBikes: 8, AvailableReturnBikes: 22, lat: lat - 0.0006, lon: lon + 0.0006 }
-                    ];
-                }
-
-                let html = `<div class="space-y-2">`;
-                bikeData.forEach((bk) => {
-                    const name = bk.StationName?.Zh_tw || "YouBike 站點";
-                    const rent = bk.AvailableRentBikes ?? 5;
-                    const rem = bk.AvailableReturnBikes ?? 12;
-                    
-                    const bLat = bk.StationPosition?.PositionLatitude || bk.lat;
-                    const bLon = bk.StationPosition?.PositionLongitude || bk.lon;
-
-                    if (markerGroup && bLat && bLon) {
-                        L.marker([bLat, bLon], {icon: createIcon(colors.bike)}).addTo(markerGroup).bindPopup(`<b>🚲 ${name}</b><br>可借: ${rent} | 可還: ${rem}`);
-                    }
-
-                    html += `
-                        <div class="bg-slate-50 p-2 rounded border border-slate-100 flex justify-between items-center">
-                            <div class="font-bold text-slate-700 text-xs">🚲 ${name}</div>
-                            <div class="flex gap-1.5 text-[11px]">
-                                <span class="bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-medium">🟢 借: ${rent}</span>
-                                <span class="bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-medium">🟠 還: ${rem}</span>
-                            </div>
-                        </div>`;
-                });
-                container.innerHTML = html + `</div>`;
-            }
-        }
-    </script>
-</body>
-</html>
+                            resultDiv.className = "p-3 rounded-lg text-sm

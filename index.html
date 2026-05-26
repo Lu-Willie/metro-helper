@@ -189,7 +189,7 @@
             }
         }
 
-        // 查詢票價與時間（支援多系統及跨系統提示）
+        // 查詢票價與時間（支援多系統及跨系統提示）—— 修正Bug版
         async function queryFareAndExecution() {
             const startValue = document.getElementById('startStation').value;
             const endValue = document.getElementById('endStation').value;
@@ -198,17 +198,22 @@
             resultDiv.className = "p-3 rounded-lg text-sm font-medium";
             resultDiv.classList.remove('hidden');
 
+            // 1. 正確切分起訖站的 ID 與系統
             const [startId, startSystem] = startValue.split(',');
             const [endId, endSystem] = endValue.split(',');
 
-            // 🛠️【1. 檢查選單與 Console 抓漏偵錯代碼】
-            const startName = stationData.find(s => s.id === startId)?.name || '未知';
-            const endName = stationData.find(s => s.id === endId)?.name || '未知';
+            // 🛠️【核心 Bug 修正點】：尋找站名時，必須同時比對 ID 與 系統(system)，才不會永遠抓到機捷台北車站！
+            const startStationObj = stationData.find(s => s.id === startId && s.system === startSystem);
+            const endStationObj = stationData.find(s => s.id === endId && s.system === endSystem);
+            
+            const startName = startStationObj ? startStationObj.name : '未知';
+            const endName = endStationObj ? endStationObj.name : '未知';
+
             console.log("======== 🚇 捷運票價查詢除錯紀錄 ========");
             console.log(`[起點站] ID: ${startId} | 系統: ${startSystem} | 名稱: ${startName}`);
             console.log(`[終點站] ID: ${endId} | 系統: ${endSystem} | 名稱: ${endName}`);
 
-            // 狀況 A：起訖站相同
+            // 狀況 A：起訖站相同（系統與ID皆相同）
             if (startId === endId && startSystem === endSystem) {
                 resultDiv.innerText = "ℹ️ 同站進出：同系統 20 分鐘內進出免費。";
                 resultDiv.className = "p-3 rounded-lg text-sm font-medium bg-amber-50 text-amber-800";
@@ -249,8 +254,7 @@
                         const resFares = await fetch('fares.json');
                         const localFares = await resFares.json();
 
-                        // 🛠️【2. 字串防呆核心校正處理】
-                        // 將所有對比的文字一律「臺轉台」、並移去所有中線與斜線，防止因 "台北101/世貿"、"台北101-世貿" 的落差對不上
+                        // 字串防呆核心校正處理
                         const cleanStr = str => String(str || '').replace(/臺/g, '台').replace(/[\/\s-]/g, '');
                         
                         const targetStart = cleanStr(startName);

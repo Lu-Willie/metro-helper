@@ -4,242 +4,120 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>捷運交通轉乘小幫手</title>
-    <link rel="manifest" href="manifest.json">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
-        #map { height: 350px; width: 100%; border-radius: 0.5rem; z-index: 1; }
+        #map { height: 350px; width: 100%; border-radius: 0.5rem; }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-800 min-h-screen font-sans pb-10">
+<body class="bg-slate-50 text-slate-800 min-h-screen pb-10">
 
     <div class="max-w-md mx-auto bg-white min-h-screen shadow-lg flex flex-col">
-        <header class="bg-blue-600 text-white p-4 text-center font-bold text-xl flex items-center justify-center gap-2 shadow-md">
-            <span>🚇</span> 捷運生活圈查詢
-        </header>
+        <header class="bg-blue-600 text-white p-4 text-center font-bold text-xl shadow-md">🚇 捷運生活圈查詢</header>
 
         <main class="p-4 flex-1 space-y-6">
             <section class="bg-slate-100 p-4 rounded-xl shadow-sm space-y-3">
-                <h2 class="font-bold text-lg flex items-center gap-1 text-blue-700">🔍 捷運起訖查詢</h2>
-                <div>
-                    <label class="block text-sm font-medium text-slate-600 mb-1">起點站</label>
-                    <select id="startStation" class="w-full p-2 border border-slate-300 rounded-lg bg-white"></select>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-slate-600 mb-1">終點站</label>
-                    <select id="endStation" class="w-full p-2 border border-slate-300 rounded-lg bg-white"></select>
-                </div>
-                <button id="queryFareBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium p-2.5 rounded-lg transition shadow-sm">
-                    查詢票價與時間
-                </button>
-                <div id="fareResult" class="hidden p-3 rounded-lg text-sm font-medium"></div>
+                <h2 class="font-bold text-lg text-blue-700">🔍 捷運起訖查詢</h2>
+                <select id="startStation" class="w-full p-2 border rounded-lg"></select>
+                <select id="endStation" class="w-full p-2 border rounded-lg"></select>
+                <button id="queryFareBtn" class="w-full bg-blue-600 text-white font-medium p-2.5 rounded-lg">查詢票價</button>
+                <div id="fareResult" class="hidden p-3 rounded-lg text-sm"></div>
             </section>
 
             <section class="bg-slate-100 p-4 rounded-xl shadow-sm space-y-4">
-                <h2 class="font-bold text-lg flex items-center gap-1 text-blue-700">🔍 車站出口周邊查詢</h2>
-                <div>
-                    <label class="block text-sm font-medium text-slate-600 mb-1">選擇車站</label>
-                    <select id="queryStation" class="w-full p-2 border border-slate-300 rounded-lg bg-white"></select>
-                </div>
-                 
-                <div>
-                    <label class="block text-sm font-medium text-slate-600 mb-1">選擇出口：</label>
-                    <div id="exitButtons" class="flex flex-wrap gap-2"></div>
-                </div>
-
+                <h2 class="font-bold text-lg text-blue-700">🔍 車站周邊查詢</h2>
+                <select id="queryStation" class="w-full p-2 border rounded-lg"></select>
+                <div id="exitButtons" class="flex flex-wrap gap-2"></div>
                 <div class="flex border-b border-slate-300">
-                    <button id="tab-attraction" class="flex-1 py-2 text-center font-medium border-b-2 border-blue-600 text-blue-600 transition">🗺️ 景點機構</button>
-                    <button id="tab-bus" class="flex-1 py-2 text-center font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 transition">🚌 附近公車</button>
-                    <button id="tab-bike" class="flex-1 py-2 text-center font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 transition">🚲 YouBike</button>
+                    <button id="tab-attraction" class="tab-btn flex-1 py-2 font-medium border-b-2 border-blue-600 text-blue-600">景點</button>
+                    <button id="tab-bus" class="tab-btn flex-1 py-2 font-medium border-b-2 border-transparent text-slate-500">公車</button>
+                    <button id="tab-bike" class="tab-btn flex-1 py-2 font-medium border-b-2 border-transparent text-slate-500">單車</button>
                 </div>
-
-                <div id="tabContent" class="bg-white p-3 rounded-lg border border-slate-200 min-h-[120px] text-sm space-y-2">
-                    <p class="text-slate-400 text-center py-6">請先選擇上方捷運站與出口</p>
-                </div>
-            </section>
-
-            <section class="space-y-2">
-                <h2 class="font-bold text-lg flex items-center gap-1 text-blue-700">🗺️ 周邊互動地圖</h2>
-                <div id="map" class="bg-slate-200"></div>
+                <div id="tabContent" class="bg-white p-3 rounded-lg border min-h-[120px] text-sm">請選擇車站</div>
+                <div id="map"></div>
             </section>
         </main>
     </div>
 
     <script>
-        let stationData = []; // 包含北捷與機捷的所有車站資訊
-        let map = null;
-        let markerGroup = null;
-        let currentStation = null;
-        let currentExit = null;
-        let currentTab = 'attraction';
+        let stationData = [];
+        let map = null, markerGroup = null, currentStation = null, currentExit = null, currentTab = 'attraction';
 
-        const colors = { exit: 'blue', bus: 'green', bike: 'orange' };
-         
-        function createIcon(color) {
-            return new L.Icon({
-                iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${color}.png`,
-                shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-                iconSize: [25, 41],
-                iconAnchor: [12, 41],
-                popupAnchor: [1, -34],
-                shadowSize: [41, 41]
-            });
-        }
-
-        // 網頁啟動初始化
         window.addEventListener('DOMContentLoaded', async () => {
             initMap();
-            await loadAllMetroData(); 
-            initTabs();
-
-            // 定時刷新功能：每隔 30 秒自動更新即時資訊
-            setInterval(() => {
-                if (currentExit) {
-                    console.log("[定時動態刷新] 30秒時限已到，正在為您更新即時轉乘動態...");
-                    renderTabContent();
-                }
-            }, 30000);
+            // 這裡請確保你有正確的 stations.json 檔案在同一目錄下
+            await loadData();
+            initListeners();
         });
 
         function initMap() {
-            try {
-                map = L.map('map').setView([25.0478, 121.5170], 15);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    attribution: '© OpenStreetMap'
-                }).addTo(map);
-                markerGroup = L.layerGroup().addTo(map);
-            } catch (e) {
-                error("地圖初始化失敗:", e);
-            }
+            map = L.map('map').setView([25.0478, 121.5170], 15);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
+            markerGroup = L.layerGroup().addTo(map);
         }
 
-        // 動態整合台北捷運與機場捷運車站資料
-        async function loadAllMetroData() {
+        async function loadData() {
             try {
-                const resStations = await fetch('stations.json');
-                const rawStations = await resStations.json();
-                 
-                // 確保每站資料帶有明確的系統歸屬標記 (未註明則預估為台北捷運 TRTC)
-                stationData = rawStations.map(s => {
-                    let sName = s.StationName || s.station_name || '';
-                    let sId = s.StationID || s.station_id || '';
-                    let system = s.system || 'TRTC';
-                    if (sId && sId.startsWith('A')) {
-                        system = 'TYMC'; // 機捷車站代號皆為 A 開頭 (如 A1, A2)
-                    }
-                    return {
-                        id: sId,
-                        name: sName,
-                        system: system,
-                        Exits: s.Exits || s.exits || []
-                    };
+                const res = await fetch('stations.json');
+                const data = await res.json();
+                stationData = data;
+                
+                const selects = ['startStation', 'endStation', 'queryStation'];
+                selects.forEach(id => {
+                    const el = document.getElementById(id);
+                    data.forEach(s => {
+                        const opt = document.createElement('option');
+                        opt.value = s.station_id;
+                        opt.textContent = s.station_name;
+                        el.appendChild(opt);
+                    });
                 });
-
-                populateDropdowns();
-            } catch (err) {
-                console.error("資料載入失敗，啟動容錯防禦機制:", err);
-            }
+            } catch (e) { console.error("資料載入錯誤", e); }
         }
 
-        // UI 優化：使用 optgroup 將選單依系統進行視覺分組，並加入字母/名稱排序保護
-        function populateDropdowns() {
-            const startSel = document.getElementById('startStation');
-            const endSel = document.getElementById('endStation');
-            const querySel = document.getElementById('queryStation');
-
-            if (!stationData || stationData.length === 0) return;
-
-            // 清空下拉選單
-            startSel.innerHTML = ''; endSel.innerHTML = ''; querySel.innerHTML = '';
-
-            // 分別篩選出北捷與機捷車站，並排序（防呆加入空字串處理）
-            const trtcStations = stationData.filter(s => s.system === 'TRTC').sort((a, b) => (a.name || '').localeCompare(b.name || '', 'zh-Hant'));
-            const tymcStations = stationData.filter(s => s.system === 'TYMC').sort((a, b) => (a.name || '').localeCompare(b.name || '', 'zh-Hant'));
-
-            // 建立跨選單的分組渲染函式
-            const appendGroupOptions = (selectElement, label, stations) => {
-                const group = document.createElement('optgroup');
-                group.label = label;
-                stations.forEach(s => {
-                    const opt = new Option(s.name, `${s.id},${s.system}`);
-                    group.appendChild(opt);
-                });
-                selectElement.appendChild(group);
-            };
-
-            // 套用 UI 優化分組到三個選單中
-            [startSel, endSel, querySel].forEach(selectEl => {
-                appendGroupOptions(selectEl, "🚇 台北捷運台北生活圈", trtcStations);
-                appendGroupOptions(selectEl, "✈️ 桃園機場捷運線", tymcStations);
+        function initListeners() {
+            document.getElementById('queryStation').addEventListener('change', (e) => {
+                const id = e.target.value;
+                currentStation = stationData.find(s => s.station_id === id);
+                renderExits();
             });
 
-            // 綁定事件監聽
-            document.getElementById('queryFareBtn').onclick = queryFareAndExecution;
-            
-            // 🛠️【Bug 修正】：選擇周邊查詢車站時，同時傳入 id 與 system
-            querySel.onchange = (e) => {
-                const [stationId, system] = e.target.value.split(',');
-                handleStationChange(stationId, system);
-            };
-             
-            // 預設選中「台北車站」
-            const defaultStation = stationData.find(s => (s.name || '').includes("台北車站") && s.system === 'TRTC') || stationData[0];
-            if (defaultStation) {
-                querySel.value = `${defaultStation.id},${defaultStation.system}`;
-                handleStationChange(defaultStation.id, defaultStation.system);
-            }
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    currentTab = e.target.id.split('-')[1];
+                    renderTabContent();
+                });
+            });
         }
 
-        // 查詢票價與時間（支援多系統及跨系統提示）
-        async function queryFareAndExecution() {
-            const startValue = document.getElementById('startStation').value;
-            const endValue = document.getElementById('endStation').value;
-            const resultDiv = document.getElementById('fareResult');
-             
-            resultDiv.className = "p-3 rounded-lg text-sm font-medium";
-            resultDiv.classList.remove('hidden');
-
-            // 1. 正確切分起訖站的 ID 與系統
-            const [startId, startSystem] = startValue.split(',');
-            const [endId, endSystem] = endValue.split(',');
-
-            const startStationObj = stationData.find(s => s.id === startId && s.system === startSystem);
-            const endStationObj = stationData.find(s => s.id === endId && s.system === endSystem);
+        function renderExits() {
+            const container = document.getElementById('exitButtons');
+            container.innerHTML = '';
+            if (!currentStation?.exits) return;
             
-            const startName = startStationObj ? startStationObj.name : '未知';
-            const endName = endStationObj ? endStationObj.name : '未知';
+            currentStation.exits.forEach(ex => {
+                const btn = document.createElement('button');
+                btn.className = "px-3 py-1 bg-white border rounded shadow-sm text-sm";
+                btn.textContent = ex.exit_name;
+                btn.onclick = () => {
+                    currentExit = ex;
+                    renderTabContent();
+                    if(ex.lat) map.setView([ex.lat, ex.lng], 16);
+                };
+                container.appendChild(btn);
+            });
+        }
 
-            console.log("======== 🚇 捷運票價查詢除錯紀錄 ========");
-            console.log(`[起點站] ID: ${startId} | 系統: ${startSystem} | 名稱: ${startName}`);
-            console.log(`[終點站] ID: ${endId} | 系統: ${endSystem} | 名稱: ${endName}`);
-
-            // 狀況 A：起訖站相同（系統與ID皆相同）
-            if (startId === endId && startSystem === endSystem) {
-                resultDiv.innerText = "ℹ️ 同站進出：同系統 20 分鐘內進出免費。";
-                resultDiv.className = "p-3 rounded-lg text-sm font-medium bg-amber-50 text-amber-800";
-                return;
-            }
-
-            // 狀況 B：同一個系統內互搭
-            if (startSystem === endSystem) {
-                resultDiv.innerHTML = "⏱️ 正在即時查詢票價資訊...";
-                resultDiv.className = "p-3 rounded-lg text-sm font-medium bg-blue-50 text-blue-600";
-                 
-                try {
-                    const url = `https://tdx.transportdata.tw/api/basic/v2/Rail/Metro/ODFare/${startSystem}?%24format=JSON`;
-                    console.log(`[即時 API 請求網址]: ${url}`);
-                    const res = await fetch(url);
-                     
-                    if (res.ok) {
-                        const fareDataList = await res.json();
-                        const matchedRoute = fareDataList.find(r => 
-                            r.OriginStationID === startId && r.DestinationStationID === endId
-                        );
-
-                        if (matchedRoute) {
-                            const adultFare = matchedRoute.Fares.find(f => f.TicketType === 1 || (f.FareName && f.FareName.includes("單程票")))?.Price ?? 20;
-                            const travelTime = matchedRoute.TravelTime ?? "暫無資料";
-
-                            resultDiv.innerHTML = `💵 單程票價：<span class="text-lg font-bold text-blue-700">${adultFare}</span> 元<br>⏱️ 行車時間：約 <span class="text-lg font-bold text-blue-700">${travelTime}</span> 分鐘`;
-                            resultDiv.className = "p-3 rounded-lg text-sm
+        function renderTabContent() {
+            const container = document.getElementById('tabContent');
+            if (!currentExit) { container.innerHTML = "請選擇出口"; return; }
+            
+            // 此處為示意：根據 currentTab 顯示資料
+            container.innerHTML = `已選擇 ${currentStation.station_name} - ${currentExit.exit_name} 的 ${currentTab} 資訊`;
+            markerGroup.clearLayers();
+            L.marker([currentExit.lat, currentExit.lng]).addTo(markerGroup);
+        }
+    </script>
+</body>
+</html>
